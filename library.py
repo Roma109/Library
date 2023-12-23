@@ -1,12 +1,17 @@
-import bidict
-
 import database
+
+
+class Genre:
+
+    def __init__(self, id: int, name: str):
+        self.id = id
+        self.name = name
 
 
 # класс описывающий книгу
 class Book:
 
-    def __init__(self, id: int, author: str, name: str, genre: str):
+    def __init__(self, id: int, author: str, name: str, genre: Genre):
         self.id = id
         self.author = author
         self.name = name
@@ -24,30 +29,35 @@ class Library:
         self.name = name
         # создаём книжную полку - словарь в котором ключ - айди книги, значения - сама книга
         self.bookshelf = dict()
-        # для жанров используем двухсторонний словарь, чтобы можно было получать не только жанр по айди, но и айди по жанру
-        # жанры не могут повторяться, так что конфликтов быть не может
-        self.genres = bidict.bidict()
+        # создаём словарь с жанрами по названию
+        self.genres_by_name = dict()
+        # создаём второй словарь в котором будем записывать жанр по айди
+        self.genres_by_id = dict()
         self.db = database.SQLiteDatabase(name)
         self.load_data()
 
     def load_data(self):
-        # загружаем информацию о книгах
-        # бд автоматически находит название жанра по записанному айдишнику, так что не нужно сверять все жанры по айди
-        for book_data in self.db.get_books():
-            self.bookshelf[book_data['id']] = Book(book_data['id'], book_data['author'], book_data['name'], book_data['genre'])
         # загружаем информацию о жанрах
         for genre_data in self.db.get_genres():
-            self.genres[genre_data['id']] = genre_data['name']
+            genre = Genre(genre_data['id'], genre_data['name'])
+            self.genres_by_name[genre.name] = genre
+            self.genres_by_id[genre.id] = genre
+        # загружаем информацию о книгах
+        for book_data in self.db.get_books():
+            self.bookshelf[book_data['id']] = Book(book_data['id'], book_data['author'], book_data['name'], self.genres_by_id[book_data['genre']])
 
-    def create_book(self, author: str, name: str, genre: str):
+    def create_book(self, author: str, name: str, genre_name: str):
         # проверяем использовался ли жанр до этого, если нет записываем его в бд
-        if genre not in self.genres.values():
+        if genre_name not in self.genres_by_name:
             # при сохранении жанра бд присваивает ему айди и возвращает его
             # используем это айди для записи жанра в словарь
-            self.genres[self.db.save_genre(genre)] = genre
+            genre_id = self.db.save_genre(genre_name)
+            genre = Genre(genre_id, genre_name)
+            self.genres_by_id[genre_id] = genre
+            self.genres_by_name[genre_name] = genre
         # записываем информацию о книге в бд, база данных присваивает книге айди и возвращает его
-        # айди жанра книги получаем через двухсторонний словарь
-        book_id = self.db.save_book(author, name, self.genres[genre])
+        genre = self.genres_by_name[genre_name]
+        book_id = self.db.save_book(author, name, genre.id)
         # используем это айди для создания книги
         book = Book(book_id, author, name, genre)
         self.bookshelf[book_id] = book
@@ -79,12 +89,14 @@ class Library:
                 books.append(book)
         return books
 
-    def find_by_genre(self, genre: str):
+    def find_by_genre(self, genre_name: str):
+        if genre_name not in self.genres_by_name:
+            return []
+        genre_id = self.genres_by_name[genre_name].id
         books = []
-        genre = genre.lower()
         # сравниваем данный жанр с жанром каждой книги, записываем результат в список
         for book in self.get_books():
-            if book.genre.lower() == genre:
+            if book.genre.id == genre_id:
                 books.append(book)
         return books
 
@@ -109,7 +121,7 @@ class LibraryConsoleUI:
         # блокируем поток бесконечным циклом
         while True:
             # выводим список команд и ждём ввод пользователя
-            inp = input(f"Выберите команду: {', '.join(self.commands.keys())}").lower()
+            inp = input(f"Выберите команду: {', '.join(self.commands.keys())}\n").lower()
             # если пользователь ввёл правильную команду передаём управление программой исполнителю этой команды
             # иначе указываем на ошибку и заново просим команду
             if inp in self.commands:
@@ -123,8 +135,12 @@ class LibraryConsoleUI:
         author = input("Введите автора: ")
         name = input("Введите название книги: ")
         # выводим список ранее использованных жанров
-        print("Выберите жанр книги:", *self.library.genres.values())
-        print("Или добавьте новый жанр")
+        genres = ", ".join(self.library.genres_by_name.keys())
+        if genres:
+            print("Выберите жанр книги:", genres)
+            print("Или добавьте новый жанр")
+        else:
+            print("Введите жанр книги: ", end="")
         genre = input().lower()
         # передаём запись книги в оперативку и базу данных библиотеке
         book = self.library.create_book(author, name, genre)

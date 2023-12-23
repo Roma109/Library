@@ -28,9 +28,8 @@ class SQLiteDatabase:
 
     def get_books(self):
         with self.connection:
-            # получаем список книг, причём название жанра сразу достаём из таблицы с жанрами
-            return self.cursor.execute('''SELECT books.id, books.author, books.name, genres.name AS genre FROM books
-            JOIN genres ON genres.id = books.genre''').fetchall()
+            # получаем список книг
+            return self.cursor.execute('SELECT * FROM books').fetchall()
 
     def save_book(self, author: str, name: str, genre: int) -> int:
         with self.connection:
