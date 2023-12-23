@@ -2,8 +2,10 @@ import library
 
 
 def main():
+    # инициализируем библиотеку
     lib = library.Library()
-    interface = library.LibraryConsoleInterface(lib)
+    # инициализируем консольный интерфейс для библиотеки
+    interface = library.LibraryConsoleUI(lib)
     interface.start()
 
 
