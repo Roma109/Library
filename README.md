@@ -2,7 +2,7 @@
 
 # Перед использованием
 
-Для работы Library необходим питон.
+Для работы Library необходим питон. https://www.python.org/downloads/release/python-3121/
 
 # Запуск
 
